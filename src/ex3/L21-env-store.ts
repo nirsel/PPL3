@@ -1,3 +1,4 @@
+
 import { add, indexOf, map, zipWith } from "ramda";
 import { Value } from './L21-value-store';
 import { Result, makeFailure, makeOk, bind, either } from "../shared/result";
@@ -20,15 +21,21 @@ export interface Store {
 export const isStore =(x: any): x is Store => x.tag === "Store";
 export const makeEmptyStore=():Store => ({tag: "Store", vals: []});
 export const theStore: Store = makeEmptyStore();
-export const extendStore = (s: Store, val: Value): Store =>
-    ({tag: "Store", vals: s.vals.concat([makeBox(val)])});
+export const extendStore = (s: Store, val: Value): Store => 
+     ({tag: "Store", vals: s.vals.concat([makeBox(val)])});
     
-export const applyStore = (store: Store, address: number): Result<Value> =>
-    store.vals.length>=address? makeFailure("no such address"):
-    makeOk(unbox(store.vals[address]))
+    
+export const applyStore = (store: Store, address: number): Result<Value> =>{
+   // store.vals.length>=address? makeFailure("no such address"):
+    return makeOk(unbox(store.vals[address]));
+}
     
 export const setStore = (store: Store, address: number, val: Value): void => 
-    setBox(store.vals[address],val)
+        setBox(store.vals[address],val);
+
+
+
+export const getAddress = (store: Store, val : Value) : number => store.vals.reduce((acc,curr)=>unbox(curr)===val?acc:acc+1,-1)
 
 // ========================================================
 // Environment data type
@@ -39,6 +46,7 @@ interface GlobalEnv {
     tag: "GlobalEnv";
     vars: Box<string[]>;
     addresses: Box<number[]>
+    store : Store
 }
 
 export interface ExtEnv {
@@ -46,10 +54,11 @@ export interface ExtEnv {
     vars: string[];
     addresses: number[];
     nextEnv: Env;
+    store: Store
 }
 
 const makeGlobalEnv = (): GlobalEnv =>
-    ({tag: "GlobalEnv", vars: makeBox([]), addresses:makeBox([])});
+    ({tag: "GlobalEnv", vars: makeBox([]), addresses:makeBox([]), store: theStore});
 
 export const isGlobalEnv = (x: any): x is GlobalEnv => x.tag === "GlobalEnv";
 
@@ -57,7 +66,7 @@ export const isGlobalEnv = (x: any): x is GlobalEnv => x.tag === "GlobalEnv";
 export const theGlobalEnv = makeGlobalEnv();
 
 export const makeExtEnv = (vs: string[], addresses: number[], env: Env): ExtEnv =>
-    ({tag: "ExtEnv", vars: vs, addresses: addresses, nextEnv: env});
+    ({tag: "ExtEnv", vars: vs, addresses: addresses, nextEnv: env, store: env.store});
 
 const isExtEnv = (x: any): x is ExtEnv => x.tag === "ExtEnv";
 
@@ -69,16 +78,17 @@ export const applyEnv = (env: Env, v: string): Result<number> =>
     applyExtEnv(env, v);
 
 const applyGlobalEnv = (env: GlobalEnv, v: string): Result<number> => {
-    const acc:number = theStore.vals.reduce((acc,curr)=>unbox(curr)===v?acc:acc+1,0);
-    return acc>=theStore.vals.length? makeFailure("failure"):
-    makeOk(acc);}
+    const ans:number = unbox(env.vars).indexOf(v);
+    return ans===-1? makeFailure("failure"):
+    makeOk(unbox(env.addresses)[ans]);}
 
 export const globalEnvAddBinding = (v: string, addr: number): void => {
-    unbox(theGlobalEnv.vars).concat([v]);
-    unbox(theGlobalEnv.addresses).concat([addr]);
-    setStore(theStore,addr,v);
+    setBox(theGlobalEnv.vars,unbox(theGlobalEnv.vars).concat([v]));
+    setBox(theGlobalEnv.addresses,unbox(theGlobalEnv.addresses).concat([addr]));
 }
 
 const applyExtEnv = (env: ExtEnv, v: string): Result<number> =>
     env.vars.includes(v) ? makeOk(env.addresses[env.vars.indexOf(v)]) :
     applyEnv(env.nextEnv, v);
+
+

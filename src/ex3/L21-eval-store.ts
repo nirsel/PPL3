@@ -3,15 +3,16 @@
 // Direct evaluation of letrec with mutation, define supports mutual recursion.
 
 import { map, reduce, repeat, zipWith } from "ramda";
-import { isBoolExp, isCExp, isLitExp, isNumExp, isPrimOp, isStrExp, isVarRef,
+import { isSetExp, SetExp, isBoolExp, isCExp, isLitExp, isNumExp, isPrimOp, isStrExp, isVarRef,
          isAppExp, isDefineExp, isIfExp, isLetExp, isProcExp, Binding, VarDecl, CExp, Exp, IfExp, LetExp, ProcExp, Program,
          parseL21Exp, DefineExp} from "./L21-ast";
-import { applyEnv, makeExtEnv, Env, Store, setStore, extendStore, ExtEnv, applyEnvStore, theGlobalEnv, globalEnvAddBinding, theStore } from "./L21-env-store";
+import { applyEnv, makeExtEnv, Env, Store, setStore, extendStore, ExtEnv, theGlobalEnv, globalEnvAddBinding, theStore, applyStore, getAddress } from "./L21-env-store";
 import { isClosure, makeClosure, Closure, Value } from "./L21-value-store";
 import { applyPrimitive } from "./evalPrimitive-store";
 import { first, rest, isEmpty } from "../shared/list";
 import { Result, bind, safe2, mapResult, makeFailure, makeOk } from "../shared/result";
 import { parse as p } from "../shared/parser";
+import { unbox } from "../shared/box";
 
 // ========================================================
 // Eval functions
@@ -21,13 +22,14 @@ const applicativeEval = (exp: CExp, env: Env): Result<Value> =>
     isBoolExp(exp) ? makeOk(exp.val) :
     isStrExp(exp) ? makeOk(exp.val) :
     isPrimOp(exp) ? makeOk(exp) :
-    isVarRef(exp) ? ...§ :
+    isVarRef(exp) ? bind(applyEnv(env,exp.var),(x:number)=>applyStore(env.store,x)) : //check
     isLitExp(exp) ? makeOk(exp.val as Value) :
     isIfExp(exp) ? evalIf(exp, env) :
     isProcExp(exp) ? evalProc(exp, env) :
     isLetExp(exp) ? evalLet(exp, env) :
     isAppExp(exp) ? safe2((proc: Value, args: Value[]) => applyProcedure(proc, args))
                         (applicativeEval(exp.rator, env), mapResult((rand: CExp) => applicativeEval(rand, env), exp.rands)) :
+    isSetExp(exp)? evalSet(exp, env):
     exp;
 
 export const isTrueValue = (x: Value): boolean =>
@@ -49,7 +51,7 @@ const applyProcedure = (proc: Value, args: Value[]): Result<Value> =>
 
 const applyClosure = (proc: Closure, args: Value[]): Result<Value> => {
     const vars = map((v: VarDecl) => v.var, proc.params);
-    const addresses: number[] = ...
+    const addresses: number[] = args.map((x: Value)=>getAddress(proc.env.store,x)); //check
     const newEnv: ExtEnv = makeExtEnv(vars, addresses, proc.env)
     return evalSequence(proc.body, newEnv);
 }
@@ -65,7 +67,12 @@ const evalCExps = (first: Exp, rest: Exp[], env: Env): Result<Value> =>
     isCExp(first) ? bind(applicativeEval(first, env), _ => evalSequence(rest, env)) :
     first;
 
-const evalDefineExps = (def: DefineExp, exps: Exp[]): Result<Value> =>
+const evalDefineExps = (def: DefineExp, exps: Exp[]): Result<Value> => //check
+    bind(applicativeEval(def.val,theGlobalEnv), (rhs: Value)=>{
+        globalEnvAddBinding(def.var.var,unbox(theGlobalEnv.vars).length+1);
+        theGlobalEnv.store = extendStore(theGlobalEnv.store,rhs);
+        return evalSequence(exps, theGlobalEnv);
+    })
     // complete
 
 // Main program
@@ -81,11 +88,14 @@ export const evalParse = (s: string): Result<Value> =>
 const evalLet = (exp: LetExp, env: Env): Result<Value> => {
     const vals = mapResult((v: CExp) => applicativeEval(v, env), map((b: Binding) => b.val, exp.bindings));
     const vars = map((b: Binding) => b.var.var, exp.bindings);
-
-    
     return bind(vals, (vals: Value[]) => {
-        const addresses = ...
-        const newEnv = makeExtEnv(vars, addresses, env)
+        const addresses = vals.map((x: Value)=>getAddress(theStore,x));
+        const newEnv = makeExtEnv(vars, addresses, env);
         return evalSequence(exp.body, newEnv);
     })
 }
+
+const evalSet = (exp : SetExp, env: Env): Result<Value> =>
+    safe2((val: Value, x: number) => makeOk(setStore(env.store,x, val)))
+    (applicativeEval(exp.val, env), applyEnv(env, exp.var.var));
+
