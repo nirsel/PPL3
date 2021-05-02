@@ -21,14 +21,16 @@ export interface Store {
 export const isStore =(x: any): x is Store => x.tag === "Store";
 export const makeEmptyStore=():Store => ({tag: "Store", vals: []});
 export const theStore: Store = makeEmptyStore();
-export const extendStore = (s: Store, val: Value): Store => 
-     ({tag: "Store", vals: s.vals.concat([makeBox(val)])});
+export const extendStore = (s: Store, val: Value): Store => {
+     s.vals = s.vals.concat([makeBox(val)]); 
+     return s; }
     
     
 export const applyStore = (store: Store, address: number): Result<Value> =>{
-   // store.vals.length>=address? makeFailure("no such address"):
-    return makeOk(unbox(store.vals[address]));
+    return store.vals.length<=address? makeFailure("no such address"):
+    makeOk(unbox(store.vals[address]));
 }
+
     
 export const setStore = (store: Store, address: number, val: Value): void => 
         setBox(store.vals[address],val);
@@ -80,7 +82,7 @@ export const applyEnv = (env: Env, v: string): Result<number> =>
 const applyGlobalEnv = (env: GlobalEnv, v: string): Result<number> => {
     const ans:number = unbox(env.vars).indexOf(v);
     return ans===-1? makeFailure("failure"):
-    makeOk(unbox(env.addresses)[ans]);}
+    makeOk((unbox(env.addresses))[ans]);}
 
 export const globalEnvAddBinding = (v: string, addr: number): void => {
     setBox(theGlobalEnv.vars,unbox(theGlobalEnv.vars).concat([v]));
