@@ -15,29 +15,29 @@ const setBox = <T>(b: Box<T>, v: T): void => { b[0] = v; return; }
 // Store datatype
 export interface Store {
     tag: "Store";
-    vals: Box<Value>[];
+    vals: Box<Box<Value>[]>;
 }
 
 export const isStore =(x: any): x is Store => x.tag === "Store";
-export const makeEmptyStore=():Store => ({tag: "Store", vals: []});
+export const makeEmptyStore=():Store => ({tag: "Store", vals: makeBox([])});
 export const theStore: Store = makeEmptyStore();
 export const extendStore = (s: Store, val: Value): Store => {
-     s.vals = s.vals.concat([makeBox(val)]); 
+     setBox(s.vals,unbox(s.vals).concat([makeBox(val)])); 
      return s; }
     
     
 export const applyStore = (store: Store, address: number): Result<Value> =>{
-    return store.vals.length<=address? makeFailure("no such address"):
-    makeOk(unbox(store.vals[address]));
+    return unbox(store.vals).length<=address? makeFailure("no such address"):
+    makeOk(unbox(unbox(store.vals)[address]));
 }
 
     
 export const setStore = (store: Store, address: number, val: Value): void => 
-        setBox(store.vals[address],val);
+        setBox(unbox(store.vals)[address],val);
 
 
 
-export const getAddress = (store: Store, val : Value) : number => store.vals.reduce((acc,curr)=>unbox(curr)===val?acc:acc+1,-1)
+export const getAddress = (store: Store, val : Value) : number => unbox(store.vals).reduce((acc,curr)=>unbox(curr)===val?acc:acc+1,-1)
 
 // ========================================================
 // Environment data type
@@ -47,8 +47,8 @@ export type Env = GlobalEnv | ExtEnv;
 interface GlobalEnv {
     tag: "GlobalEnv";
     vars: Box<string[]>;
-    addresses: Box<number[]>
-    store : Store
+    addresses: Box<number[]>;
+    
 }
 
 export interface ExtEnv {
@@ -56,11 +56,10 @@ export interface ExtEnv {
     vars: string[];
     addresses: number[];
     nextEnv: Env;
-    store: Store
 }
 
 const makeGlobalEnv = (): GlobalEnv =>
-    ({tag: "GlobalEnv", vars: makeBox([]), addresses:makeBox([]), store: theStore});
+    ({tag: "GlobalEnv", vars: makeBox([]), addresses:makeBox([])});
 
 export const isGlobalEnv = (x: any): x is GlobalEnv => x.tag === "GlobalEnv";
 
@@ -68,7 +67,7 @@ export const isGlobalEnv = (x: any): x is GlobalEnv => x.tag === "GlobalEnv";
 export const theGlobalEnv = makeGlobalEnv();
 
 export const makeExtEnv = (vs: string[], addresses: number[], env: Env): ExtEnv =>
-    ({tag: "ExtEnv", vars: vs, addresses: addresses, nextEnv: env, store: env.store});
+    ({tag: "ExtEnv", vars: vs, addresses: addresses, nextEnv: env});
 
 const isExtEnv = (x: any): x is ExtEnv => x.tag === "ExtEnv";
 
